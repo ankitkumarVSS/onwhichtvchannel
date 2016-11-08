@@ -1,14 +1,29 @@
 package com.onwhichtvchannel.Activity;
 
+import android.app.ActionBar;
 import android.app.ProgressDialog;
 import android.content.Context;
+import android.content.IntentFilter;
+import android.graphics.Color;
+import android.graphics.Typeface;
 import android.os.AsyncTask;
+import android.os.Build;
+import android.support.design.widget.Snackbar;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.util.Log;
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
+import com.onwhichtvchannel.Adapter.DataAdapter;
 import com.onwhichtvchannel.Model.DataModel;
 import com.onwhichtvchannel.Model.ItemModel;
+import com.onwhichtvchannel.Network.ConnectionDetector;
 import com.onwhichtvchannel.R;
 import com.onwhichtvchannel.Utils.Constants;
 
@@ -19,19 +34,66 @@ import org.jsoup.select.Elements;
 
 import java.util.ArrayList;
 
+/**
+ * This activity is used for downloading HTML from URL and parse the same to pass into adapter.
+ */
+
 public class MainActivity extends AppCompatActivity {
 
     private Context mContext;
+    private LinearLayout linearLayout;
+    private TextView titleText;
+    private Typeface latoBlack;
+    private RecyclerView mRecyclerView;
+    private RecyclerView.LayoutManager mLayoutManager;
+    private DataAdapter hanginAdepter;
+    private Snackbar snackbar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
         mContext = MainActivity.this;
 
-        new GetDataFromHtml().execute(new String[]{Constants.URL});
+        linearLayout = (LinearLayout) findViewById(R.id.ll_main);
+        mRecyclerView = (RecyclerView) findViewById(R.id.list);
+        mRecyclerView.setHasFixedSize(true);
+        mLayoutManager = new LinearLayoutManager(this);
+        mRecyclerView.setLayoutManager(mLayoutManager);
+        titleText = (TextView) findViewById(R.id.title);
+
+        latoBlack = Typeface.createFromAsset(getAssets(), "Lato-Black.ttf");
+        titleText.setTypeface(latoBlack);
+
+
+        getData(Constants.noConnection);
     }
 
+    //getData method used to check internet connection and call GetDataFromHtml call for fetching data from html.
+    public void getData(final String message) {
+        if (snackbar != null && snackbar.isShown()) {
+            snackbar.dismiss();
+        }
+        snackbar = Snackbar.make(linearLayout,
+                message, Snackbar.LENGTH_INDEFINITE);
+        snackbar.setAction("Refresh", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                getData(message);
+            }
+        });
+        snackbar.setActionTextColor(ContextCompat.getColor(mContext, R.color.creamYellowLite));
+        View snackbarView = snackbar.getView();
+        TextView textView = (TextView) snackbarView.findViewById(android.support.design.R.id.snackbar_text);
+        textView.setTextColor(Color.WHITE);
+        if (new ConnectionDetector(mContext).isConnectingToInternet()) {
+            new GetDataFromHtml().execute(new String[]{Constants.URL});
+        } else {
+            snackbar.show();
+        }
+    }
 
+    //GetDataFromHtml call download html from url and parse it for data
     private class GetDataFromHtml extends AsyncTask<String, Void, ArrayList<DataModel>> {
 
         ProgressDialog prog;
@@ -42,7 +104,7 @@ public class MainActivity extends AppCompatActivity {
 
             //Start Progress Dialog
             prog = new ProgressDialog(mContext);
-            prog.setMessage(mContext.getResources().getString(R.string.loading));
+            prog.setMessage(Constants.loading);
             prog.setIndeterminate(false);
             prog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
             prog.setCancelable(false);
@@ -54,13 +116,12 @@ public class MainActivity extends AppCompatActivity {
             ArrayList<DataModel> dataModelArrayList = new ArrayList<>();
             Document doc = null;
             try {
-                Log.d("JSwa", "Connecting to [" + strings[0] + "]");
+
+                //Download html from url with body size 10000000 bytes.
                 doc = Jsoup.connect(strings[0]).maxBodySize(10000000).get();
-                Log.d("JSwa", "Connected to [" + strings[0] + "]");
 
                 // Get document (HTML page) title
                 String title = doc.title();
-                Log.d("JSwA", "Title [" + title + "]");
 
                 // Get [tab-content mb-30] div data
                 Elements tabDiv = doc.select("div.tab-content.ft-tab-content.mb-30");
@@ -141,6 +202,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             } catch (Throwable t) {
                 t.printStackTrace();
+                getData(Constants.badConnection);
             }
             return dataModelArrayList;
         }
@@ -152,6 +214,10 @@ public class MainActivity extends AppCompatActivity {
                 if (prog != null && prog.isShowing()) {
                     prog.dismiss();
                 }
+
+                // set adapter to recyclerview with Arraylist of dataModel.
+                hanginAdepter = new DataAdapter(mContext, dataModelArrayList);
+                mRecyclerView.setAdapter(hanginAdepter);
             } catch (Exception e) {
                 e.printStackTrace();
             }
